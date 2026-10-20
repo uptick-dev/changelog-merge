@@ -1,5 +1,8 @@
 name: Merge Changelog Fragments
-description: Merges per-PR changelog fragments into a single combined changelog, grouping entries under matching category headers.
+description: >-
+  Merges per-PR changelog fragments into a single combined changelog, grouping
+  entries under matching category headers. Optionally computes the next public
+  semver version from the fragments' bump lines.
 
 inputs:
   fragments-dir:
@@ -8,11 +11,35 @@ inputs:
   output-file:
     description: Path to write the combined changelog
     default: CHANGES_COMBINED.md
+  semver:
+    description: >-
+      Compute the next public semver version from the highest
+      "<!-- bump: ... -->" line across the fragments (see changelog-generate's
+      record-bump). Fragments without one count as patch.
+    default: "false"
+  public-tags:
+    description: Newline-separated tags already published, so a version is never reused. Non-semver tags are ignored.
+    default: ""
+  public-version-file:
+    description: File holding the last public version (e.g. config/public_version). Read as another published version; this action does not write it.
+    default: ""
+  max-major:
+    description: Highest allowed major version. A major bump past it is published as minor. Empty means no cap.
+    default: ""
+  semver-floor:
+    description: Lowest version to publish (X.Y.Z), for the first semver release after an older scheme. Empty means no floor.
+    default: ""
 
 outputs:
   has-fragments:
     description: Whether any fragments were found
     value: ${{ steps.merge.outputs.has-fragments }}
+  public-version:
+    description: Next public semver version, without a v prefix (semver only)
+    value: ${{ steps.merge.outputs.public-version }}
+  bump:
+    description: Bump applied to the public version (patch, minor or major), after the max-major cap (semver only)
+    value: ${{ steps.merge.outputs.bump }}
 
 runs:
   using: composite
@@ -24,3 +51,8 @@ runs:
       env:
         FRAGMENTS_DIR: ${{ inputs.fragments-dir }}
         OUTPUT_FILE: ${{ inputs.output-file }}
+        SEMVER: ${{ inputs.semver }}
+        PUBLIC_TAGS: ${{ inputs.public-tags }}
+        PUBLIC_VERSION_FILE: ${{ inputs.public-version-file }}
+        MAX_MAJOR: ${{ inputs.max-major }}
+        SEMVER_FLOOR: ${{ inputs.semver-floor }}

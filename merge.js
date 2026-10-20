@@ -1,9 +1,17 @@
 const fs = require("fs");
 const path = require("path");
+const { maxBump, nextPublicVersion } = require("./semver");
 
 const fragmentsDir = process.env.FRAGMENTS_DIR || "changelog";
 const outputFile = process.env.OUTPUT_FILE || "CHANGES_COMBINED.md";
 const githubOutput = process.env.GITHUB_OUTPUT;
+const semver = process.env.SEMVER === "true";
+// The highest allowed major version; a major bump past it is published as minor. Empty means no cap.
+const maxMajorInput = (process.env.MAX_MAJOR || "").trim();
+const semverFloor = (process.env.SEMVER_FLOOR || "").trim();
+const publicVersionFile = process.env.PUBLIC_VERSION_FILE || "";
+// Newline-separated tags from the public repository, so a version published there is never reused.
+const publicTags = process.env.PUBLIC_TAGS || "";
 
 function findFragments(dir) {
   if (!fs.existsSync(dir)) return [];
@@ -26,12 +34,19 @@ function parseFragment(filePath) {
   const lines = content.split("\n");
   const sections = new Map();
   let title = null;
+  let bump = null;
   let currentHeader = null;
 
   for (const line of lines) {
     const titleMatch = line.match(/^<!--\s*title:\s*(.+?)\s*-->$/);
+    // test.yml writes "<!-- bump: minor (computed) -->"; a line without "(computed)" is a manual override.
+    const bumpMatch = line.match(
+      /^<!--\s*bump:\s*(patch|minor|major)(\s*\(computed\))?\s*-->$/
+    );
     if (titleMatch) {
       title = titleMatch[1];
+    } else if (bumpMatch) {
+      bump = bumpMatch[1];
     } else if (line.startsWith("### ")) {
       currentHeader = line;
       if (!sections.has(currentHeader)) {
@@ -44,7 +59,43 @@ function parseFragment(filePath) {
     }
   }
 
-  return { title, sections };
+  return { title, bump, sections };
+}
+
+// Fragments without a bump line (written before semver, or by hand) count as patch.
+function releaseBump(fragments) {
+  return maxBump(fragments.map((f) => parseFragment(f).bump || "patch"));
+}
+
+// cliff.toml prefixes breaking commits with this.
+const BREAKING_MARKER = "[**breaking**]";
+
+// "feat!: Remove X" -> "Remove X"
+function stripConventionalPrefix(title) {
+  return title.replace(/^[a-z]+(\([^)]*\))?!?:\s*/i, "");
+}
+
+// Lists the breaking items, which carry the BREAKING CHANGE: migration note. A fragment marked major without one falls back to its title.
+function breakingChanges(fragments) {
+  let output = "### ⚠️ Breaking changes\n";
+  for (const filePath of fragments) {
+    const { title, bump, sections } = parseFragment(filePath);
+    if (bump !== "major") continue;
+    const items = [...sections.values()]
+      .flat()
+      .filter((item) => item.includes(BREAKING_MARKER));
+    if (items.length > 0) {
+      for (const item of items) {
+        output += item.replace(`${BREAKING_MARKER} `, "") + "\n";
+      }
+    } else {
+      const heading = title
+        ? stripConventionalPrefix(title)
+        : `PR #${prNumberFromPath(filePath)}`;
+      output += `- ${heading}\n`;
+    }
+  }
+  return output + "\n";
 }
 
 function mergeFragments(fragments) {
@@ -65,6 +116,10 @@ function mergeFragments(fragments) {
 
 function formatOutput(fragments) {
   let output = "# Changelog\n\n## [Unreleased]\n\n";
+
+  if (releaseBump(fragments) === "major") {
+    output += breakingChanges(fragments);
+  }
 
   if (fragments.length === 1) {
     const { sections } = parseFragment(fragments[0]);
@@ -103,8 +158,36 @@ function formatOutput(fragments) {
   return output;
 }
 
+function readFile(file) {
+  return fs.existsSync(file) ? fs.readFileSync(file, "utf-8").trim() : "";
+}
+
+function publicVersion(fragments) {
+  const maxMajor = maxMajorInput === "" ? Infinity : Number(maxMajorInput);
+  if (!Number.isInteger(maxMajor) && maxMajor !== Infinity) {
+    throw new Error(`max-major must be a whole number, got "${maxMajorInput}"`);
+  }
+  const published = [
+    publicVersionFile ? readFile(publicVersionFile) : "",
+    ...publicTags.split("\n"),
+  ];
+  return nextPublicVersion({
+    bump: releaseBump(fragments),
+    published,
+    maxMajor,
+    floor: semverFloor,
+  });
+}
+
 function main() {
   const fragments = findFragments(fragmentsDir);
+  if (semver) {
+    const { version, bump } = publicVersion(fragments);
+    console.log(`Next public version is ${version} (${bump})`);
+    if (githubOutput) {
+      fs.appendFileSync(githubOutput, `public-version=${version}\nbump=${bump}\n`);
+    }
+  }
 
   if (fragments.length === 0) {
     console.log("No changelog fragments found");
@@ -130,6 +213,7 @@ if (require.main === module) {
 } else {
   module.exports = {
     parseFragment,
+    releaseBump,
     mergeFragments,
     formatOutput,
     findFragments,
