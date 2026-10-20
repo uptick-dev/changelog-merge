@@ -9,7 +9,7 @@ Part of the changelog actions suite:
 ## Usage
 
 ```yaml
-- uses: ten-thousand-hammers/changelog-merge@v1
+- uses: uptick-dev/changelog-merge@v1
   id: merge
   with:
     fragments-dir: changelog
@@ -38,7 +38,7 @@ Part of the changelog actions suite:
 - **Multiple fragments** → each is grouped under a `### {PR title}` sub-heading
   (falling back to `### PR #{number}`), with categories nested as `#### {category}`.
   The PR title is read from a `<!-- title: ... -->` comment that
-  [`changelog-generate`](https://github.com/ten-thousand-hammers/changelog-generate)
+  [`changelog-generate`](https://github.com/uptick-dev/changelog-generate)
   injects into each fragment.
 
 ## Development

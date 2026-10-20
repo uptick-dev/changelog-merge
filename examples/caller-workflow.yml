@@ -20,14 +20,14 @@ jobs:
 
       - name: Merge changelog fragments
         id: merge
-        uses: ten-thousand-hammers/changelog-merge@v1
+        uses: uptick-dev/changelog-merge@v1
         with:
           fragments-dir: changelog
           output-file: CHANGES_COMBINED.md
 
       - name: Install git-cliff (for the fallback)
         if: steps.merge.outputs.has-fragments == 'false'
-        uses: ten-thousand-hammers/setup-git-cliff@v1
+        uses: uptick-dev/setup-git-cliff@v1
 
       - name: Fallback to git-cliff when there are no fragments
         if: steps.merge.outputs.has-fragments == 'false'
