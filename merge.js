@@ -194,6 +194,10 @@ function publicVersion(fragments) {
 }
 
 function main() {
+  // Checked first, so a typo fails even when there are no fragments.
+  if (groupBy !== "pr" && groupBy !== "section") {
+    throw new Error(`group-by must be "pr" or "section", got "${groupBy}"`);
+  }
   const fragments = findFragments(fragmentsDir);
   if (semver) {
     const { version, bump } = publicVersion(fragments);
@@ -212,9 +216,6 @@ function main() {
   }
 
   console.log(`Found changelog fragments: ${fragments.join(", ")}`);
-  if (groupBy !== "pr" && groupBy !== "section") {
-    throw new Error(`group-by must be "pr" or "section", got "${groupBy}"`);
-  }
   const output = formatOutput(fragments, { groupBy });
   fs.writeFileSync(outputFile, output);
   console.log(`Written combined changelog to ${outputFile}`);
