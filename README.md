@@ -25,6 +25,7 @@ Part of the changelog actions suite:
 | --- | --- | --- |
 | `fragments-dir` | `changelog` | Directory containing `*-CHANGES.md` fragment files. |
 | `output-file` | `CHANGES_COMBINED.md` | Path to write the combined changelog. |
+| `group-by` | `pr` | `pr` nests categories under each PR title; `section` lists each category once for the release (see below). |
 | `semver` | `"false"` | Compute the next public semver version from the fragments' bump lines (see below). |
 | `public-tags` | `""` | Newline-separated tags already published (e.g. from `git ls-remote --tags`). Non-semver tags are ignored. |
 | `public-version-file` | `""` | File holding the last public version, read as another published version. Not written by this action. |
@@ -42,7 +43,11 @@ Part of the changelog actions suite:
 ## How fragments are merged
 
 - **One fragment** → its category sections are emitted flat under `## [Unreleased]`.
-- **Multiple fragments** → each is grouped under a `### {PR title}` sub-heading
+- **Multiple fragments, `group-by: section`** → each category is emitted once,
+  flat, with every PR's entries in it, in the order categories first appear.
+  A `Behind the scenes` category (from changelog-generate's `summarize`) always
+  goes last. Use this when the entries read on their own, as summarized ones do.
+- **Multiple fragments** (default `group-by: pr`) → each is grouped under a `### {PR title}` sub-heading
   (falling back to `### PR #{number}`), with categories nested as `#### {category}`.
   The PR title is read from a `<!-- title: ... -->` comment that
   [`changelog-generate`](https://github.com/uptick-dev/changelog-generate)

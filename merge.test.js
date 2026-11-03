@@ -475,6 +475,61 @@ describe("formatOutput", () => {
     assert.ok(output.includes("#### ✨ Changed"));
     assert.ok(!/^### ✨ Changed/m.test(output));
   });
+
+  test("group-by section lists each category once, behind the scenes last", () => {
+    const f1 = writeTempFragment(
+      tmpDir,
+      "100-CHANGES.md",
+      `# Changelog
+
+## [Unreleased]
+<!-- title: feat: A -->
+
+### 🔧 Behind the scenes
+- Cleanup A
+
+### 🚀 Added
+- Feature A
+`
+    );
+
+    const f2 = writeTempFragment(
+      tmpDir,
+      "101-CHANGES.md",
+      `# Changelog
+
+## [Unreleased]
+<!-- title: fix: B -->
+
+### 🐛 Fixed
+- Fix B
+
+### 🔧 Behind the scenes
+- Cleanup B
+`
+    );
+
+    const output = formatOutput([f1, f2], { groupBy: "section" });
+
+    assert.strictEqual(
+      output,
+      `# Changelog
+
+## [Unreleased]
+
+### 🚀 Added
+- Feature A
+
+### 🐛 Fixed
+- Fix B
+
+### 🔧 Behind the scenes
+- Cleanup A
+- Cleanup B
+
+`
+    );
+  });
 });
 
 describe("findFragments", () => {

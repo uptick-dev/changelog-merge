@@ -12,6 +12,8 @@ const semverFloor = (process.env.SEMVER_FLOOR || "").trim();
 const publicVersionFile = process.env.PUBLIC_VERSION_FILE || "";
 // Newline-separated tags from the public repository, so a version published there is never reused.
 const publicTags = process.env.PUBLIC_TAGS || "";
+// "pr" nests each fragment's categories under its PR title; "section" lists every category once for the whole release.
+const groupBy = process.env.GROUP_BY || "pr";
 
 function findFragments(dir) {
   if (!fs.existsSync(dir)) return [];
@@ -114,16 +116,28 @@ function mergeFragments(fragments) {
   return merged;
 }
 
-function formatOutput(fragments) {
+// changelog-generate's summarize writes this category; it goes after the visible ones.
+const BEHIND_THE_SCENES = /behind the scenes/i;
+
+function behindTheScenesLast(sections) {
+  const entries = [...sections];
+  return [
+    ...entries.filter(([header]) => !BEHIND_THE_SCENES.test(header)),
+    ...entries.filter(([header]) => BEHIND_THE_SCENES.test(header)),
+  ];
+}
+
+function formatOutput(fragments, { groupBy = "pr" } = {}) {
   let output = "# Changelog\n\n## [Unreleased]\n\n";
 
   if (releaseBump(fragments) === "major") {
     output += breakingChanges(fragments);
   }
 
-  if (fragments.length === 1) {
-    const { sections } = parseFragment(fragments[0]);
-    for (const [header, items] of sections) {
+  if (fragments.length === 1 || groupBy === "section") {
+    const sections =
+      fragments.length === 1 ? parseFragment(fragments[0]).sections : mergeFragments(fragments);
+    for (const [header, items] of behindTheScenesLast(sections)) {
       if (items.length > 0) {
         output += header + "\n";
         for (const item of items) {
@@ -180,6 +194,10 @@ function publicVersion(fragments) {
 }
 
 function main() {
+  // Checked first, so a typo fails even when there are no fragments.
+  if (groupBy !== "pr" && groupBy !== "section") {
+    throw new Error(`group-by must be "pr" or "section", got "${groupBy}"`);
+  }
   const fragments = findFragments(fragmentsDir);
   if (semver) {
     const { version, bump } = publicVersion(fragments);
@@ -198,7 +216,7 @@ function main() {
   }
 
   console.log(`Found changelog fragments: ${fragments.join(", ")}`);
-  const output = formatOutput(fragments);
+  const output = formatOutput(fragments, { groupBy });
   fs.writeFileSync(outputFile, output);
   console.log(`Written combined changelog to ${outputFile}`);
 
